@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 )
 
 type Node struct {
@@ -259,10 +261,33 @@ func TestStruct(value interface{}) {
 
 }
 
+func process(i int, wg *sync.WaitGroup, test *int) {
+	fmt.Println("started Goroutine ", i)
+	time.Sleep(3 * time.Second)
+	if *test == 1 {
+		fmt.Printf("Goroutine %d ended\n", i)
+	} else {
+		fmt.Printf("Outside if Goroutine %d ended\n", i)
+	}
+
+	wg.Done()
+}
+
 func main() {
 
-	g := NewUnDiGraph()
-	g.ParseFileToGraph("mygraph.dot.dot")
+	test := 1
+	no := 3
+	var wg sync.WaitGroup
+	for i := 0; i < no; i++ {
+		wg.Add(1)
+		go process(i, &wg, &test)
+	}
+	test = 2
+	wg.Wait()
+	fmt.Println("All go routines finished executing")
+
+	// g := NewUnDiGraph()
+	// g.ParseFileToGraph("mygraph.dot.dot")
 	// path := "mygraph.dot"
 	// g.ParseFileToGraph(path)
 	// fmt.Println(g.String())
@@ -311,6 +336,6 @@ func main() {
 	// tst := "digraph [ dpi = 600 ];"
 
 	// test := strings.Fields(tst)
-	fmt.Println(g.String())
+	// fmt.Println(g.String())
 
 }

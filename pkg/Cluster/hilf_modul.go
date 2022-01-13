@@ -34,7 +34,8 @@ const (
 	Pars_DiG_To_Dot
 	Read_DiG_From_DotFile
 	Read_Neighbours_From_DotFile
-	Create_Rondom_Graph
+	Pars_Random_DiGraph_PNG
+	Pars_Random_UnDiGraph_PNG
 	Default
 )
 
@@ -51,7 +52,8 @@ func Menu() {
 	fmt.Println("7. Parse directed graph to .dot file")
 	fmt.Println("8. Read graph from file")
 	fmt.Println("9. Read neighbour from gv.dot file")
-	fmt.Println("10. Create Rondom Directed Graph")
+	fmt.Println("10. Parse Random genereted DirectGraph to PNG file")
+	fmt.Println("11. Parse Random genereted UnDirectGraph to PNG file")
 }
 
 type Error_And_Msg struct {
@@ -125,4 +127,23 @@ func SearchMemberbyName(nodeName string, ml *memberlist.Memberlist) *memberlist.
 		}
 	}
 	return &foundNode
+}
+
+//url=https://stackoverflow.com/questions/51275036/split-a-string-of-one-side-letters-one-side-numbers
+func ParseNodeId(s string) (numbers string) {
+	// var l, n []rune
+	var n []rune
+	for _, r := range s {
+		switch {
+		// case r >= 'A' && r <= 'Z':
+		// 	l = append(l, r)
+		// case r >= 'a' && r <= 'z':
+		// 	l = append(l, r)
+		case r >= '0' && r <= '9':
+
+			n = append(n, r)
+		}
+	}
+	// return string(l), string(n)
+	return string(n)
 }

@@ -1,6 +1,7 @@
 package Cluster
 
 import (
+	"VAA_Uebung1/pkg/Election"
 	"VAA_Uebung1/pkg/Exception"
 	"VAA_Uebung1/pkg/Graph"
 	"VAA_Uebung1/pkg/Neighbour"
@@ -41,6 +42,7 @@ func InitCluster(nodeName, bindIP, bindPort, httpPort string) {
 		Exception.ErrorHandler(err)
 	}
 
+	//config
 	config := memberlist.DefaultLocalConfig()
 	config.Name = nodeName
 	config.BindAddr = bindIP
@@ -48,23 +50,36 @@ func InitCluster(nodeName, bindIP, bindPort, httpPort string) {
 	config.SecretKey = clusterKey
 	config.LogOutput = ioutil.Discard
 
+	//create a memberlist
 	ml, err := memberlist.Create(config)
 	err_st := Error_And_Msg{Err: err}
 	Check(err_st)
 
+	//new graph
 	g := Graph.NewDiGraph()
 
+	//neibour variable
 	neigbours := Neighbour.NewNeighbourList()
 	neigbours.Node = *ml.LocalNode()
 	neigbourNum := 3
 	nodeList := new(Neighbour.NodesList)
 	nodesNeighbour := Neighbour.NodesAndNeighbours{}
 
+	//Nodelist could be accessable from eventdelegate
 	AddClusterMemberToNodeList(ml, nodeList)
 
+	//rumors var
 	rumors_list := NewRumorsList()
 	blievableRRNum := 2
 
+	//ElectionExplorer
+	// nodeId, _ := strconv.Atoi(ParseNodeId(ml.LocalNode().Name))
+	electionExplorer := Election.NewElection(0, *ml.LocalNode())
+	echoMessage := new(Election.Echo)
+	ringMessage := new(Election.RingMessage)
+	echoCounter := new(int)
+
+	//register all var to syncerdelegate
 	sd := &SyncerDelegate{
 		Node: ml, Neighbours: neigbours, NeighbourNum: &neigbourNum,
 		NodeList: nodeList, Graph: g,
@@ -73,6 +88,10 @@ func InitCluster(nodeName, bindIP, bindPort, httpPort string) {
 		neighbourFilePath:    &file,
 		RumorsList:           rumors_list,
 		BelievableRumorsRNum: &blievableRRNum,
+		ElectionExplorer:     electionExplorer,
+		EchoMessage:          echoMessage,
+		RingMessage:          ringMessage,
+		EchoCounter:          echoCounter,
 	}
 
 	config.Delegate = sd
@@ -172,10 +191,10 @@ func userInput(ml *memberlist.Memberlist, g *Graph.Graph,
 	case Print_Cluster_Nodes:
 		print_all_nodes(ml)
 	case Send_Rumor:
-		SendRumors(ml, rumorslist, &sd)
+		SendElectionExplorer(ml, &sd)
 	case ParseNeighbourG_To_PNG:
-
-		parseDiGToPNG(g, nodesNeighbour)
+		print_neighbours_as_digraph(g, nodesNeighbour)
+		parseDiGToPNG(g)
 	case Print_Cluster_Nodes_Neighbours:
 		print_all_neigbour(nodesNeighbour)
 	case Print_Cluster_Nodes_Neighbours_As_DiG:
@@ -186,14 +205,22 @@ func userInput(ml *memberlist.Memberlist, g *Graph.Graph,
 		readGraphFromFile()
 	case Read_Neighbours_From_DotFile:
 		readNeighbours_from_file(ml, sd)
-	case Create_Rondom_Graph:
+
+	case Pars_Random_DiGraph_PNG:
 		nodeNum := -1
 		edgeNum := -1
 		Input(&nodeNum, &edgeNum)
-		g := Graph.RondomDiGraph(nodeNum, edgeNum)
+		g := Graph.RondomDiGraph(nodeNum, edgeNum, true)
 		fmt.Println(g.String())
-		// g.ParseGraphToFile("testGraph")
-		// fmt.Println("Successfully added to the file testgraph.dot")
+		parseDiGToPNG(&g)
+	case Pars_Random_UnDiGraph_PNG:
+		nodeNum := -1
+		edgeNum := -1
+		Input(&nodeNum, &edgeNum)
+		g := Graph.RondomDiGraph(nodeNum, edgeNum, false)
+		fmt.Println(g.String())
+		parseDiGToPNG(&g)
+
 	}
 
 }
@@ -252,13 +279,33 @@ func parseDiGToDot(g *Graph.Graph, nn *Neighbour.NodesAndNeighbours) {
 	g.ParseGraphToFile(file_name)
 }
 
-func parseDiGToPNG(g *Graph.Graph, nn *Neighbour.NodesAndNeighbours) {
+func ParseUnDiGToPNG(g *Graph.Graph) {
 	file_name := ""
 	fmt.Printf("Enter file name without \".png\": ")
 	fmt.Scanf("%s", &file_name)
 
-	print_neighbours_as_digraph(g, nn)
 	g.ParseGraphToPNGFile(file_name)
+
+}
+
+func parseDiGToPNG(g *Graph.Graph) {
+	file_name := ""
+	fmt.Printf("Enter file name without \".png\": ")
+	fmt.Scanf("%s", &file_name)
+
+	g.ParseGraphToPNGFile(file_name)
+}
+
+func SendElectionExplorer(ml *memberlist.Memberlist, sd *SyncerDelegate) {
+	tempExplorer := Election.NewElection(8, *ml.LocalNode())
+	sd.ElectionExplorer = tempExplorer
+	sd.SendMsgToNeighbours(tempExplorer)
+	println("Election initiert----------------: %s", ml.LocalNode().Name)
+	time.Sleep(1 * time.Second)
+	tempExplorer.M = 10
+	sd.ElectionExplorer = tempExplorer
+	sd.SendMsgToNeighbours(tempExplorer)
+	println("Election initiert----------------: %s", ml.LocalNode().Name)
 }
 
 func SendRumors(ml *memberlist.Memberlist, rumorsList *RumorsList, sd *SyncerDelegate) {

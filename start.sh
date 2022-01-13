@@ -16,7 +16,7 @@ function start_cluster_node () {
     if [[ "$1" == "init" ]] 
     then
         command gnome-terminal --tab --title=$2 -- /bin/bash -c \
-            "./$CLUSTER_START_FILE $1 --node-name=$2 --bind-ip=$3 --bind-port=$4 --http-port=$5; bash"
+            "./$CLUSTER_START_FILE $1 --node-name=$2 --bind-ip=$3 --bind-port=$4 --http-port=$5"
         # command ./$CLUSTER_START_FILE init >output.txt 2>&1  &
     elif [[ "$1" == "join" ]] && [[ $# -eq 6 ]]
     then

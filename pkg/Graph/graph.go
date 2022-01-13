@@ -180,6 +180,7 @@ func (g *Graph) ParseStringToDiG(data string) {
 		return
 	}
 	//if graph is undirected
+	g.Directed = false
 	for scanner.Scan() {
 		line := scanner.Text()
 		str := regexp.MustCompile(`[\w\d]+.\--.[\w\d]+`)
@@ -189,6 +190,9 @@ func (g *Graph) ParseStringToDiG(data string) {
 			g.AddNode(strings.TrimSpace(strings.Split(element, "--")[1]))
 			g.AddEdge(strings.TrimSpace(strings.Split(element, "--")[0]),
 				strings.TrimSpace(strings.Split(element, "--")[1]),
+			)
+			g.AddEdge(strings.TrimSpace(strings.Split(element, "--")[1]),
+				strings.TrimSpace(strings.Split(element, "--")[0]),
 			)
 		}
 	}
@@ -239,11 +243,16 @@ func (g *Graph) ParseGraphToPNGFile(filename string) {
 	cmd.Wait()
 }
 
-func RondomDiGraph(nodeNum, edgeNum int) Graph {
+func RondomDiGraph(nodeNum, edgeNum int, directed bool) Graph {
+	var g *Graph
+	if directed {
+		g = NewDiGraph()
+	} else {
+		g = NewUnDiGraph()
+	}
 
-	g := NewUnDiGraph()
 	for index := 0; index < nodeNum; index++ {
-		g.AddNode("node0" + strconv.Itoa(index))
+		g.AddNode("Philisoph" + strconv.Itoa(index))
 	}
 
 	randNode := ""

@@ -1,0 +1,18 @@
+graph ClusterNodes {
+		graph [ dpi = 600 ]; 
+		rankdir=UD;
+		size="8,5";
+		node [shape = circle];
+	Philisoph9 -- Philisoph5
+	Philisoph0 -- Philisoph4
+	Philisoph1 -- Philisoph7
+	Philisoph1 -- Philisoph2
+	Philisoph3 -- Philisoph5
+	Philisoph4 -- Philisoph2
+	Philisoph4 -- Philisoph7
+	Philisoph7 -- Philisoph5
+	Philisoph7 -- Philisoph8
+	Philisoph2 -- Philisoph6
+	Philisoph6 -- Philisoph8
+	Master -- Philisoph1
+}

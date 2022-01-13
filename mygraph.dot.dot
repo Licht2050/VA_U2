@@ -1,9 +1,0 @@
-graph ClusterNodes {
-		graph [ dpi = 600 ]; 
-		rankdir=UD;
-		size="8,5";
-		node [shape = circle];
-	node01 -- node02
-	node01 -- node03
-        node02 -- node04
-}
