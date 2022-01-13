@@ -273,6 +273,7 @@ func process(i int, wg *sync.WaitGroup, test *int) {
 	wg.Done()
 }
 
+/*
 func main() {
 
 	test := 1
@@ -339,3 +340,4 @@ func main() {
 	// fmt.Println(g.String())
 
 }
+*/
