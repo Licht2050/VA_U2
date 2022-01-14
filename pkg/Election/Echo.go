@@ -27,7 +27,7 @@ func (e *Echo) AddSender(node memberlist.Node) {
 
 func (e *Echo) Clear() {
 	e.Coordinator = 0
-	e.EchoRecievedNum = 1
+	e.EchoRecievedNum = 0
 	e.EchoWaitedNum = 0
 	e.EchoSenderList = make(map[string]*memberlist.Node)
 }

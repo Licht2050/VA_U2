@@ -78,6 +78,7 @@ func InitCluster(nodeName, bindIP, bindPort, httpPort string) {
 	echoMessage := new(Election.Echo)
 	ringMessage := new(Election.RingMessage)
 	echoCounter := new(int)
+	echoMessage.Clear()
 
 	//register all var to syncerdelegate
 	sd := &SyncerDelegate{
@@ -298,14 +299,11 @@ func parseDiGToPNG(g *Graph.Graph) {
 
 func SendElectionExplorer(ml *memberlist.Memberlist, sd *SyncerDelegate) {
 	tempExplorer := Election.NewElection(8, *ml.LocalNode())
+	sd.ElectionExplorer.M = 8
 	sd.ElectionExplorer = tempExplorer
 	sd.SendMsgToNeighbours(tempExplorer)
 	println("Election initiert----------------: %s", ml.LocalNode().Name)
-	time.Sleep(1 * time.Second)
-	tempExplorer.M = 10
-	sd.ElectionExplorer = tempExplorer
-	sd.SendMsgToNeighbours(tempExplorer)
-	println("Election initiert----------------: %s", ml.LocalNode().Name)
+
 }
 
 func SendRumors(ml *memberlist.Memberlist, rumorsList *RumorsList, sd *SyncerDelegate) {

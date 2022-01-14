@@ -70,6 +70,7 @@ func JoinCluster(nodeName, bindIP, bindPort, httpPort, clusterKey, knownIP strin
 	echoMessage := new(Election.Echo)
 	ringMessage := new(Election.RingMessage)
 	echoCounter := new(int)
+	echoMessage.Clear()
 
 	sd := &SyncerDelegate{
 		Node: ml, Neighbours: neigbours, NeighbourNum: &neigbourNum,
