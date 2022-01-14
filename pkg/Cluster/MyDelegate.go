@@ -108,7 +108,6 @@ func (sd *SyncerDelegate) NotifyMsg(msg []byte) {
 		if sd.ElectionExplorer.CompaireElection(*explorer) == "eq" {
 
 			if !sd.ElectionExplorer.ContainsNodeInRecievedFrom(explorer.Initiator) {
-
 				//hier wird bestimmt, dass der Node von diesem Node auch keine Echo erwartet,
 				//weil er der selbe Nachricht erhalten hat.
 				sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
@@ -116,30 +115,28 @@ func (sd *SyncerDelegate) NotifyMsg(msg []byte) {
 				fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$4 Sender: ", explorer.Initiator, " ==========: ",
 					sd.EchoMessage.EchoWaitedNum, "----mssage waited: ", sd.EchoMessage.EchoWaitedNum,
 					" mssage recieved: ", sd.EchoMessage.EchoRecievedNum)
-
 			}
 			if sd.EchoMessage.EchoRecievedNum == sd.EchoMessage.EchoWaitedNum {
 				fmt.Println("Echo wird gesendet, Weil weiter Knoten in ein Zycklus sind")
 				SendEchoMessageFirst(sd)
 			}
+			//if recieved explorer is greater than local explorer id and the neigbour list is greater than 1
 		} else if sd.ElectionExplorer.CompaireElection(*explorer) == "gt" && len(sd.Neighbours.Neighbours) > 1 {
-
-			fmt.Println("RecievedFrom: ", explorer.Initiator.Name)
-
+			//th clean previous election process
 			sd.EchoMessage.Clear()
 			sd.ElectionExplorer.Clear()
 
-			tempExplorer := *explorer
-			tempExplorer.RecievedFrom = make(map[string]*memberlist.Node)
-			tempExplorer.Add_RecievedFrom(*explorer.Initiator)
-
+			//temp var, because the recieved explorer is a pointer.
+			var tempExplorer Election.ElectionExplorer
+			tempExplorer.Clear()
+			tempExplorer = *explorer
+			//init the local explorer struct with recieved to save all the info.
+			sd.ElectionExplorer = &tempExplorer
+			sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
+			explorer.Initiator = sd.LocalNode
 			//hier wird bestimmt, dass der Node von alle seine Nachbarn echo Nachrichten erwartet
 			//ausser der Sender
-
 			sd.EchoMessage.EchoWaitedNum = len(sd.Neighbours.Neighbours) - 1
-			fmt.Println("WatedNum: ", sd.EchoMessage.EchoWaitedNum)
-			sd.ElectionExplorer = &tempExplorer
-			explorer.Initiator = sd.LocalNode
 
 			sendExplorer(explorer, sd)
 		} else if sd.ElectionExplorer.CompaireElection(*explorer) == "gt" && len(sd.Neighbours.Neighbours) == 1 {
@@ -150,21 +147,6 @@ func (sd *SyncerDelegate) NotifyMsg(msg []byte) {
 			SendEchoMessageFirst(sd)
 
 		}
-		// for _, nei := range sd.Neighbours.Neighbours {
-		// 	if _, ok := sd.ElectionExplorer.OtherSender[nei.Name]; !ok {
-
-		// 		sd.Node.SendBestEffort(&nei, body)
-		// 	}
-		// }
-
-		// sd.SendMsgToNeighbours(explorer)
-
-		// fmt.Printf("Rumors: %s\n\tcount: %d\tBleivalbe: %v\t\n\tRecieved from: %v\n",
-		// 	sd.RumorsList.Rumors[rumors.RummorsMsg.Msg].RummorsMsg.Msg,
-		// 	sd.RumorsList.Rumors[rumors.RummorsMsg.Msg].RecievedRumorsNum,
-		// 	sd.RumorsList.Rumors[rumors.RummorsMsg.Msg].Believable,
-		// 	sd.RumorsList.Rumors[rumors.RummorsMsg.Msg].RecievedFrom,
-		// )
 
 	} else if check == "echo_message" {
 		fmt.Println("Echo Message")
@@ -262,18 +244,13 @@ func sendExplorer(explorer *Election.ElectionExplorer, sd *SyncerDelegate) {
 	body, err := json.Marshal(explorer)
 	error_and_msg := Error_And_Msg{Err: err, Text: "Encode the rumors faild!"}
 	Check(error_and_msg)
-	found := false
-	for _, neighbours := range sd.Neighbours.Neighbours {
-		for _, sender := range sd.ElectionExplorer.RecievedFrom {
-			if neighbours.Name == sender.Name {
-				found = true
-			}
+
+	for _, neighbour := range sd.Neighbours.Neighbours {
+		if neighbour.Name != sd.ElectionExplorer.Initiator.Name {
+			fmt.Println("##########################3 Send To: ", neighbour.Name)
+			sd.Node.SendBestEffort(&neighbour, body)
 		}
-		if !found {
-			fmt.Println("##########################3 Send To: ", neighbours.Name)
-			sd.Node.SendBestEffort(&neighbours, body)
-		}
-		found = false
+
 	}
 }
 
