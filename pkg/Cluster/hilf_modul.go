@@ -46,6 +46,13 @@ const (
 	NEIGHBOUR_INFO_MESSAGE
 )
 
+const (
+	RECIEVED_ExplorerID_EQUAL_TO_Local_ID = iota
+	RECIEVED_ExplorerID_GREATER_TO_Local_ID
+	IS_LEAF_NODE
+	IS_NOT_LEAF_NODE
+)
+
 func Menu() {
 
 	fmt.Println("Menu")

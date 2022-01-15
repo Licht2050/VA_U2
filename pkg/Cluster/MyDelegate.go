@@ -107,17 +107,28 @@ func echo_message_handling(msg []byte, sd *SyncerDelegate) {
 	if echo_message.Coordinator == sd.ElectionExplorer.M {
 		//update the local echo sender list
 		UpdateLocalEchoMessage(sd, echo_message)
+		if sd.EchoMessage.EchoWaitedNum == sd.EchoMessage.EchoRecievedNum {
+			if sd.LocalNode.Name != sd.ElectionExplorer.Initiator.Name {
+				//When er von all seine Nachbarn bekommen hat, traegt er die sender auf die EchoSenderList ein.
+				echo_message.EchoSenderList = sd.EchoMessage.EchoSenderList
+				sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, sd.EchoMessage)
 
-		if sd.EchoMessage.EchoWaitedNum == sd.EchoMessage.EchoRecievedNum && sd.LocalNode.Name != sd.ElectionExplorer.Initiator.Name {
-			//When er von all seine Nachbarn bekommen hat, traegt er die sender auf die EchoSenderList ein.
-			echo_message.EchoSenderList = sd.EchoMessage.EchoSenderList
-			sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, sd.EchoMessage)
+			} else {
+				fmt.Println("I am the Coordinator and i Recieved From : ", sd.EchoMessage.EchoSenderList)
+				Inform_coordinator_success(*sd.EchoMessage, *sd)
 
-		} else {
-			fmt.Println("I am the Coordinator and i Recieved From : ", sd.EchoMessage.EchoSenderList)
+			}
 		}
-
 	}
+}
+
+func Inform_coordinator_success(echo Election.Echo, sd SyncerDelegate) {
+	msg := Message{Msg: "Iam_the_Coordinator", Snder: sd.Node.LocalNode().Name}
+
+	for _, sender := range echo.EchoSenderList {
+		sd.SendMesgToMember(*sender, msg)
+	}
+
 }
 
 func election_explorer_message_handling(msg []byte, sd *SyncerDelegate) {
@@ -128,65 +139,97 @@ func election_explorer_message_handling(msg []byte, sd *SyncerDelegate) {
 
 	fmt.Println("Message From: ", explorer.Initiator.Name, "**************: ", explorer.M)
 
-	if sd.ElectionExplorer.CompaireElection(*explorer) == "eq" {
+	switch sd.CompaireElection(*explorer) {
 
-		if !sd.ElectionExplorer.ContainsNodeInRecievedFrom(explorer.Initiator) {
-			//hier wird bestimmt, dass der Node von diesem Node auch keine Echo erwartet,
-			//weil er der selbe Nachricht erhalten hat.
-			sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
-			sd.EchoMessage.EchoWaitedNum--
-			fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$4 Sender: ", explorer.Initiator, " ==========: ",
-				sd.EchoMessage.EchoWaitedNum, "----mssage waited: ", sd.EchoMessage.EchoWaitedNum,
-				" mssage recieved: ", sd.EchoMessage.EchoRecievedNum)
-		}
-		if sd.EchoMessage.EchoRecievedNum == sd.EchoMessage.EchoWaitedNum {
-			if sd.ElectionExplorer.Initiator != sd.LocalNode {
-
-				fmt.Println("Echo wird gesendet, Weil weiter Knoten in ein Zycklus sind")
-
-				fmt.Println("Send Echo For the First time to : ", sd.ElectionExplorer.Initiator)
-
-				sd.EchoMessage.Coordinator = sd.ElectionExplorer.M
-				sd.EchoMessage.EchoSender = *sd.LocalNode
-				sd.EchoMessage.AddSender(*sd.LocalNode)
-
-				sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, sd.EchoMessage)
-			}
-
-		}
+	case RECIEVED_ExplorerID_EQUAL_TO_Local_ID:
+		If_The_Same_Explorer_Recieved(sd, explorer)
 		//if recieved explorer is greater than local explorer id and the neigbour list is greater than 1
-	} else if sd.ElectionExplorer.CompaireElection(*explorer) == "gt" && len(sd.Neighbours.Neighbours) > 1 {
-		//th clean previous election process
-		sd.EchoMessage.Clear()
-		sd.ElectionExplorer.Clear()
+	case RECIEVED_ExplorerID_GREATER_TO_Local_ID:
 
-		var tempExplorer Election.ElectionExplorer
-		tempExplorer.Clear()
-		tempExplorer = *explorer
-		//init the local explorer struct with recieved to save all the info.
-		sd.ElectionExplorer = &tempExplorer
-		sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
-		explorer.Initiator = sd.LocalNode
+		switch sd.Check_If_Nod_is_Leaf() {
+		case IS_NOT_LEAF_NODE:
+			//th clean previous election process
+			sd.EchoMessage.Clear()
+			sd.ElectionExplorer.Clear()
 
-		//hier wird bestimmt, dass der Node von alle seine Nachbarn echo Nachrichten erwartet
-		//ausser der Sender
-		sd.EchoMessage.EchoWaitedNum = len(sd.Neighbours.Neighbours) - 1
+			var tempExplorer Election.ElectionExplorer
+			tempExplorer.Clear()
+			tempExplorer = *explorer
+			//init the local explorer struct with recieved to save all the info.
+			sd.ElectionExplorer = &tempExplorer
+			sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
+			explorer.Initiator = sd.LocalNode
 
-		sendExplorer(explorer, sd)
-	} else if sd.ElectionExplorer.CompaireElection(*explorer) == "gt" && len(sd.Neighbours.Neighbours) == 1 {
-		//send echo
-		sd.ElectionExplorer.M = explorer.M
-		sd.ElectionExplorer.Initiator = explorer.Initiator
+			//hier wird bestimmt, dass der Node von alle seine Nachbarn echo Nachrichten erwartet
+			//ausser der Sender
+			sd.EchoMessage.EchoWaitedNum = len(sd.Neighbours.Neighbours) - 1
 
-		fmt.Println("Send Echo For the First time to : ", sd.ElectionExplorer.Initiator)
+			sendExplorer(explorer, sd)
+		case IS_LEAF_NODE:
 
-		sd.EchoMessage.Coordinator = sd.ElectionExplorer.M
-		sd.EchoMessage.EchoSender = *sd.LocalNode
-		sd.EchoMessage.AddSender(*sd.LocalNode)
+			//send echo
+			sd.ElectionExplorer.M = explorer.M
+			sd.ElectionExplorer.Initiator = explorer.Initiator
 
-		sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, sd.EchoMessage)
+			fmt.Println("Send Echo For the First time to : ", sd.ElectionExplorer.Initiator)
+
+			sd.EchoMessage.Coordinator = sd.ElectionExplorer.M
+			sd.EchoMessage.EchoSender = *sd.LocalNode
+			sd.EchoMessage.AddSender(*sd.LocalNode)
+
+			sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, sd.EchoMessage)
+		}
 
 	}
+}
+
+//If the recieves the same explorer.
+//if the sender is not containt in the local explorer sender list, then it will save to the local sender list and
+//waited for echo var will decrement.
+//If the recieved counter and waited counter are equal && the node is not the elction initiator,
+//then node start to send echo to node, which recieved for the first time.
+func If_The_Same_Explorer_Recieved(sd *SyncerDelegate, explorer *Election.ElectionExplorer) {
+	if !sd.ElectionExplorer.ContainsNodeInRecievedFrom(explorer.Initiator) {
+		//hier wird bestimmt, dass der Node von diesem Node auch keine Echo erwartet,
+		//weil er der selbe Nachricht erhalten hat.
+		sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
+		sd.EchoMessage.EchoWaitedNum--
+		fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$4 Sender: ", explorer.Initiator, " ==========: ",
+			sd.EchoMessage.EchoWaitedNum, "----mssage waited: ", sd.EchoMessage.EchoWaitedNum,
+			" mssage recieved: ", sd.EchoMessage.EchoRecievedNum)
+	}
+	if sd.EchoMessage.EchoRecievedNum == sd.EchoMessage.EchoWaitedNum {
+		if sd.ElectionExplorer.Initiator != sd.LocalNode {
+			fmt.Println("Echo wird gesendet, Weil weiter Knoten in ein Zycklus sind")
+			fmt.Println("Send Echo For the First time to : ", sd.ElectionExplorer.Initiator)
+
+			sd.EchoMessage.Coordinator = sd.ElectionExplorer.M
+			sd.EchoMessage.EchoSender = *sd.LocalNode
+			sd.EchoMessage.AddSender(*sd.LocalNode)
+
+			sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, sd.EchoMessage)
+		}
+	}
+}
+
+func (sd *SyncerDelegate) CompaireElection(eN Election.ElectionExplorer) int {
+
+	if sd.ElectionExplorer.M < eN.M {
+		return RECIEVED_ExplorerID_GREATER_TO_Local_ID
+	} else if sd.ElectionExplorer.M == eN.M {
+		return RECIEVED_ExplorerID_EQUAL_TO_Local_ID
+	}
+	return Default
+}
+
+func (sd *SyncerDelegate) Check_If_Nod_is_Leaf() int {
+	if len(sd.Neighbours.Neighbours) == 1 {
+		return IS_LEAF_NODE
+	}
+	if len(sd.Neighbours.Neighbours) > 1 {
+		return IS_NOT_LEAF_NODE
+	}
+	return Default
 }
 
 //as message the following action will be handeld:
@@ -197,17 +240,19 @@ func Message_Handling(msg []byte, sd *SyncerDelegate) {
 	var receivedMsg Message
 	err := json.Unmarshal(msg, &receivedMsg)
 	_ = err
-
-	if receivedMsg.Msg == "leave" {
+	switch receivedMsg.Msg {
+	case "Iam_the_Coordinator":
+		fmt.Println("Message : ", receivedMsg.Msg, "Coordinator: ", receivedMsg.Snder)
+	case "leave":
 		//Leave will kill the process
 		//and the node will remove from Cluster-Memberlist
 		sd.Leave()
 
-	} else if receivedMsg.Msg == "readNeighbour" {
+	case "readNeighbour":
 		fmt.Println("Readed .dot file -----------------------------------------------")
 		read_neighbours_from_dot_file(sd, receivedMsg)
 
-	} else if receivedMsg.Msg == "Start_Election" {
+	case "Start_Election":
 		fmt.Println("I Have to Start Election Process Message to become coordinator +++++++++++++++++++++++++")
 		start_election(sd)
 		println("Election started----------------: ", sd.ElectionExplorer.M)
@@ -240,10 +285,13 @@ func read_neighbours_from_dot_file(sd *SyncerDelegate, receivedMsg Message) {
 //update the local echo sender list
 func UpdateLocalEchoMessage(sd *SyncerDelegate, echo_message *Election.Echo) {
 	sd.EchoMessage.EchoRecievedNum++
+	if sd.ElectionExplorer.Initiator.Name != sd.LocalNode.Name {
+		sd.EchoMessage.AddSender(*sd.LocalNode)
+	}
 	sd.EchoMessage.AddSender(echo_message.EchoSender)
 	sd.EchoMessage.Coordinator = sd.ElectionExplorer.M
 	sd.EchoMessage.EchoSender = *sd.LocalNode
-	sd.EchoMessage.AddSender(*sd.LocalNode)
+
 	for _, sender := range echo_message.EchoSenderList {
 		sd.EchoMessage.EchoSenderList[sender.Name] = sender
 	}

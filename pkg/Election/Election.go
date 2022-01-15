@@ -48,16 +48,6 @@ func (e *ElectionExplorer) Add_RecievedFrom(node memberlist.Node) {
 	e.RecievedFrom[node.Name] = &node
 }
 
-func (e *ElectionExplorer) CompaireElection(eN ElectionExplorer) string {
-
-	if e.M < eN.M {
-		return "gt"
-	} else if e.M == eN.M {
-		return "eq"
-	}
-	return "lt"
-}
-
 func (e *ElectionExplorer) Clear() {
 	e.M = -1
 	e.Initiator = nil

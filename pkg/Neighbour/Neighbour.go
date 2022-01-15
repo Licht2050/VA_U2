@@ -175,36 +175,3 @@ func (nl *NeighboursList) UpdateNeighbourList(neighbourNum int, list NodesList) 
 		list_temp.Nodes = append(list_temp.Nodes[:rIndex], list_temp.Nodes[rIndex+1:]...)
 	}
 }
-
-// func main() {
-
-// 	nodList := NodesList{}
-
-// 	nodList.Nodes = append(nodList.Nodes, &memberlist.Node{Name: "NodesList", Port: 888})
-// 	nodList.Nodes = append(nodList.Nodes, &memberlist.Node{Name: "Node01", Port: 888})
-// 	nodList.Nodes = append(nodList.Nodes, &memberlist.Node{Name: "Node04", Port: 488})
-// 	nodList.Nodes = append(nodList.Nodes, &memberlist.Node{Name: "Node05", Port: 488})
-// 	nodList.Nodes = append(nodList.Nodes, &memberlist.Node{Name: "Node06", Port: 488})
-
-// 	node := &memberlist.Node{Name: "Node07", Port: 888}
-
-// 	// neighbours := new(NeiboursList)
-// 	neighbours := NewNeighbourList()
-
-// 	neighbours.Node.Name = "TEST"
-
-// 	neighbours.Neighbours = append(neighbours.Neighbours, node)
-// 	neighbours.Node = *nodList.Nodes[0]
-
-// 	neighbours.UpdateNeighbourList(5, nodList)
-
-// 	// for _, neigbour := range neigbours.Neibours {
-// 	// 	fmt.Println(neigbour.Name)
-// 	// }
-// 	fmt.Println(neighbours.String())
-
-// 	neighbours.RemoveNeighbour(*node)
-// 	fmt.Println("After Remove---------------------------------------------")
-// 	fmt.Println(neighbours.String())
-
-// }
