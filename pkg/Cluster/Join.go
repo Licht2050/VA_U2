@@ -66,7 +66,7 @@ func JoinCluster(nodeName, bindIP, bindPort, httpPort, clusterKey, knownIP strin
 
 	//ElectionExplorer
 	// nodeId, _ := strconv.Atoi(ParseNodeId(ml.LocalNode().Name))
-	electionExplorer := Election.NewElection(0, *ml.LocalNode())
+	electionExplorer := Election.NewElection(-1, *ml.LocalNode())
 	echoMessage := new(Election.Echo)
 	ringMessage := new(Election.RingMessage)
 	echoCounter := new(int)

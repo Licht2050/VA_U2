@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
+	"strconv"
 
 	"github.com/hashicorp/memberlist"
 )
@@ -33,7 +33,7 @@ type SyncerDelegate struct {
 }
 
 //compare the incoming byte message to structs
-func CompareJson(msg []byte, NeigbourGraph interface{}) string {
+func CompareJson(msg []byte, NeigbourGraph interface{}) int {
 	var receivedMsg map[string]interface{}
 	err := json.Unmarshal(msg, &receivedMsg)
 	_ = err
@@ -42,20 +42,20 @@ func CompareJson(msg []byte, NeigbourGraph interface{}) string {
 	for key := range receivedMsg {
 
 		if key == "neighbours" {
-			return "neighbourStrucht"
+			return NEIGHBOUR_INFO_MESSAGE
 
 		}
 		if key == "m" {
-			return "election_explorer"
+			return ELECTION_EXPLORER_MESSAGE
 		}
 		if key == "coordinator" {
-			return "echo_message"
+			return ELECTION_ECHO_MESSAGE
 		}
 		if key == "ring_sender" {
-			return "ring_message"
+			return -1
 		}
 	}
-	return "msg"
+	return MESSAGE
 }
 
 // NotifyMsg is called when a user-data message is received.
@@ -63,142 +63,184 @@ func CompareJson(msg []byte, NeigbourGraph interface{}) string {
 // so would block the entire UDP packet receive loop. Additionally, the byte
 // slice may be modified after the call returns, so it should be copied if needed.
 func (sd *SyncerDelegate) NotifyMsg(msg []byte) {
-	// fmt.Println(string(msg))
-	// validate if the msg is struct of Neigbour{}
 
 	check := CompareJson(msg, Neighbour.NeighboursList{})
 
-	if check == "msg" {
-
-		// ms := NeigbourGraph{Node: sd.Node.LocalNode().Name}
-		var receivedMsg Message
-		err := json.Unmarshal(msg, &receivedMsg)
-		_ = err
-
-		if receivedMsg.Msg == "leave" {
-			//Leave will kill the process
-			//and the node will remove from Cluster-Memberlist
-			sd.Leave()
-
-		} else if receivedMsg.Msg == "readNeighbour" {
-			fmt.Println("Readed .dot file -----------------------------------------------")
-			//clear the available neighbour list
-			//Read Graph from file
-			//add Nodes to Neighbourlist if there is a releastionship for this nod found
-			//Send the new neighbour list to MasterNode
-			sd.neighbourFilePath = &receivedMsg.FilePath
-			ReadNeighbourFromDot(sd)
-
-			for _, ne := range sd.Neighbours.Neighbours {
-				fmt.Println("Neigbous: ", ne.Name)
-			}
-			// sd.Broadcast()
-			// sd.Node.UpdateNode(time.Millisecond)
-
-		}
-
-	} else if check == "election_explorer" {
-		fmt.Println("Explorerrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr")
-		explorer := new(Election.ElectionExplorer)
-		err := json.Unmarshal(msg, explorer)
-		_ = err
-
-		fmt.Println("Message From: ", explorer.Initiator.Name, "**************: ", explorer.M)
-
-		if sd.ElectionExplorer.CompaireElection(*explorer) == "eq" {
-
-			if !sd.ElectionExplorer.ContainsNodeInRecievedFrom(explorer.Initiator) {
-				//hier wird bestimmt, dass der Node von diesem Node auch keine Echo erwartet,
-				//weil er der selbe Nachricht erhalten hat.
-				sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
-				sd.EchoMessage.EchoWaitedNum--
-				fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$4 Sender: ", explorer.Initiator, " ==========: ",
-					sd.EchoMessage.EchoWaitedNum, "----mssage waited: ", sd.EchoMessage.EchoWaitedNum,
-					" mssage recieved: ", sd.EchoMessage.EchoRecievedNum)
-			}
-			if sd.EchoMessage.EchoRecievedNum == sd.EchoMessage.EchoWaitedNum {
-				fmt.Println("Echo wird gesendet, Weil weiter Knoten in ein Zycklus sind")
-				SendEchoMessageFirst(sd)
-			}
-			//if recieved explorer is greater than local explorer id and the neigbour list is greater than 1
-		} else if sd.ElectionExplorer.CompaireElection(*explorer) == "gt" && len(sd.Neighbours.Neighbours) > 1 {
-			//th clean previous election process
-			sd.EchoMessage.Clear()
-			sd.ElectionExplorer.Clear()
-
-			//temp var, because the recieved explorer is a pointer.
-			var tempExplorer Election.ElectionExplorer
-			tempExplorer.Clear()
-			tempExplorer = *explorer
-			//init the local explorer struct with recieved to save all the info.
-			sd.ElectionExplorer = &tempExplorer
-			sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
-			explorer.Initiator = sd.LocalNode
-			//hier wird bestimmt, dass der Node von alle seine Nachbarn echo Nachrichten erwartet
-			//ausser der Sender
-			sd.EchoMessage.EchoWaitedNum = len(sd.Neighbours.Neighbours) - 1
-
-			sendExplorer(explorer, sd)
-		} else if sd.ElectionExplorer.CompaireElection(*explorer) == "gt" && len(sd.Neighbours.Neighbours) == 1 {
-			//send echo
-			// sd.EchoMessage.Clear()
-			sd.ElectionExplorer.M = explorer.M
-			sd.ElectionExplorer.Initiator = explorer.Initiator
-			SendEchoMessageFirst(sd)
-
-		}
-
-	} else if check == "echo_message" {
-		fmt.Println("Echo Message")
-		echo_message := new(Election.Echo)
-		err := json.Unmarshal(msg, echo_message)
-		_ = err
-		fmt.Println("Echo Sender: ", echo_message.EchoSender)
-		fmt.Println("--------------: ", echo_message.EchoSenderList)
-		fmt.Println("Koordinator Id--------------: ", echo_message.Coordinator)
-
-		if echo_message.Coordinator == sd.ElectionExplorer.M {
-			//update the local echo sender list
-			UpdateLocalEchoMessage(sd, echo_message)
-			sd.EchoMessage.EchoRecievedNum++
-			sd.EchoMessage.AddSender(echo_message.EchoSender)
-
-			if sd.Node.LocalNode().Name == "Master" {
-				fmt.Println("Master Recieved From : ", sd.EchoMessage.EchoSenderList)
-			} else {
-
-				fmt.Println("+++++++++++++++EchoRecievedNum++++++++++++++++++++: ", sd.EchoMessage.EchoRecievedNum)
-				fmt.Println("+++++++++++++++EchoWaitedNum++++++++++++++++++++: ", sd.EchoMessage.EchoWaitedNum)
-				fmt.Println("M:======================: ", sd.ElectionExplorer.M)
-				if sd.EchoMessage.EchoWaitedNum == sd.EchoMessage.EchoRecievedNum {
-					fmt.Println("Inside If sended")
-					//When er von all seine Nachbarn bekommen hat, traegt er die sender auf die EchoSenderList ein.
-					echo_message.EchoSenderList = sd.EchoMessage.EchoSenderList
-
-					sd.SendEchoToNeighbours(sd.EchoMessage)
-
-				}
-			}
-		}
-		// sd.EchoMessage.Coordinator = echo_message.Coordinator
-
-	} else if check == "neighbourStrucht" {
+	switch check {
+	case MESSAGE:
+		//all incoming message as Message struct will be handeld
+		Message_Handling(msg, sd)
+	case ELECTION_EXPLORER_MESSAGE:
+		//It will handle the explorer message
+		election_explorer_message_handling(msg, sd)
+	case ELECTION_ECHO_MESSAGE:
+		//it handeld the echo message. echo message contains the answer for coordinator election message.
+		echo_message_handling(msg, sd)
+	case NEIGHBOUR_INFO_MESSAGE:
 		//MasterNode recieve's neighbours from every node in the cluster afther any update occurred
 		//afther recieved the message it will insert nodes and their neighbour's in to "NodesAndNeighbours" list
-		if sd.Node.LocalNode().Name == "Master" {
+		neighbour_info_message_handling(sd, msg)
+	}
+}
 
-			var receivedMsg Neighbour.NeighboursList
-			err := json.Unmarshal(msg, &receivedMsg)
-			errorAnd_Msg := Error_And_Msg{Err: err, Text: "Could not encode the NeighboursInfo message"}
-			Check(errorAnd_Msg)
+func neighbour_info_message_handling(sd *SyncerDelegate, msg []byte) {
+	if sd.Node.LocalNode().Name == "Master" {
 
-			sd.NodesNeighbour.AddNodesAndNeighbours(receivedMsg)
+		var receivedMsg Neighbour.NeighboursList
+		err := json.Unmarshal(msg, &receivedMsg)
+		errorAnd_Msg := Error_And_Msg{Err: err, Text: "Could not encode the NeighboursInfo message"}
+		Check(errorAnd_Msg)
+
+		sd.NodesNeighbour.AddNodesAndNeighbours(receivedMsg)
+	}
+}
+
+func echo_message_handling(msg []byte, sd *SyncerDelegate) {
+	fmt.Println("Echo Message")
+	echo_message := new(Election.Echo)
+	err := json.Unmarshal(msg, echo_message)
+	_ = err
+	fmt.Println("Echo Sender: ", echo_message.EchoSender)
+	fmt.Println("--------------: ", echo_message.EchoSenderList)
+	fmt.Println("Koordinator Id--------------: ", echo_message.Coordinator)
+
+	if echo_message.Coordinator == sd.ElectionExplorer.M {
+		//update the local echo sender list
+		UpdateLocalEchoMessage(sd, echo_message)
+
+		if sd.EchoMessage.EchoWaitedNum == sd.EchoMessage.EchoRecievedNum && sd.LocalNode.Name != sd.ElectionExplorer.Initiator.Name {
+			//When er von all seine Nachbarn bekommen hat, traegt er die sender auf die EchoSenderList ein.
+			echo_message.EchoSenderList = sd.EchoMessage.EchoSenderList
+			sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, sd.EchoMessage)
+
+		} else {
+			fmt.Println("I am the Coordinator and i Recieved From : ", sd.EchoMessage.EchoSenderList)
 		}
+
+	}
+}
+
+func election_explorer_message_handling(msg []byte, sd *SyncerDelegate) {
+	fmt.Println("Explorerrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr")
+	explorer := new(Election.ElectionExplorer)
+	err := json.Unmarshal(msg, explorer)
+	_ = err
+
+	fmt.Println("Message From: ", explorer.Initiator.Name, "**************: ", explorer.M)
+
+	if sd.ElectionExplorer.CompaireElection(*explorer) == "eq" {
+
+		if !sd.ElectionExplorer.ContainsNodeInRecievedFrom(explorer.Initiator) {
+			//hier wird bestimmt, dass der Node von diesem Node auch keine Echo erwartet,
+			//weil er der selbe Nachricht erhalten hat.
+			sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
+			sd.EchoMessage.EchoWaitedNum--
+			fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$4 Sender: ", explorer.Initiator, " ==========: ",
+				sd.EchoMessage.EchoWaitedNum, "----mssage waited: ", sd.EchoMessage.EchoWaitedNum,
+				" mssage recieved: ", sd.EchoMessage.EchoRecievedNum)
+		}
+		if sd.EchoMessage.EchoRecievedNum == sd.EchoMessage.EchoWaitedNum {
+			if sd.ElectionExplorer.Initiator != sd.LocalNode {
+
+				fmt.Println("Echo wird gesendet, Weil weiter Knoten in ein Zycklus sind")
+
+				fmt.Println("Send Echo For the First time to : ", sd.ElectionExplorer.Initiator)
+
+				sd.EchoMessage.Coordinator = sd.ElectionExplorer.M
+				sd.EchoMessage.EchoSender = *sd.LocalNode
+				sd.EchoMessage.AddSender(*sd.LocalNode)
+
+				sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, sd.EchoMessage)
+			}
+
+		}
+		//if recieved explorer is greater than local explorer id and the neigbour list is greater than 1
+	} else if sd.ElectionExplorer.CompaireElection(*explorer) == "gt" && len(sd.Neighbours.Neighbours) > 1 {
+		//th clean previous election process
+		sd.EchoMessage.Clear()
+		sd.ElectionExplorer.Clear()
+
+		var tempExplorer Election.ElectionExplorer
+		tempExplorer.Clear()
+		tempExplorer = *explorer
+		//init the local explorer struct with recieved to save all the info.
+		sd.ElectionExplorer = &tempExplorer
+		sd.ElectionExplorer.Add_RecievedFrom(*explorer.Initiator)
+		explorer.Initiator = sd.LocalNode
+
+		//hier wird bestimmt, dass der Node von alle seine Nachbarn echo Nachrichten erwartet
+		//ausser der Sender
+		sd.EchoMessage.EchoWaitedNum = len(sd.Neighbours.Neighbours) - 1
+
+		sendExplorer(explorer, sd)
+	} else if sd.ElectionExplorer.CompaireElection(*explorer) == "gt" && len(sd.Neighbours.Neighbours) == 1 {
+		//send echo
+		sd.ElectionExplorer.M = explorer.M
+		sd.ElectionExplorer.Initiator = explorer.Initiator
+
+		fmt.Println("Send Echo For the First time to : ", sd.ElectionExplorer.Initiator)
+
+		sd.EchoMessage.Coordinator = sd.ElectionExplorer.M
+		sd.EchoMessage.EchoSender = *sd.LocalNode
+		sd.EchoMessage.AddSender(*sd.LocalNode)
+
+		sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, sd.EchoMessage)
+
+	}
+}
+
+//as message the following action will be handeld:
+//body=leave -> the process will exist
+//body=readNeighbour -> the node will read its neighbour from file
+//body=Start_Election -> the node will start elcetion process
+func Message_Handling(msg []byte, sd *SyncerDelegate) {
+	var receivedMsg Message
+	err := json.Unmarshal(msg, &receivedMsg)
+	_ = err
+
+	if receivedMsg.Msg == "leave" {
+		//Leave will kill the process
+		//and the node will remove from Cluster-Memberlist
+		sd.Leave()
+
+	} else if receivedMsg.Msg == "readNeighbour" {
+		fmt.Println("Readed .dot file -----------------------------------------------")
+		read_neighbours_from_dot_file(sd, receivedMsg)
+
+	} else if receivedMsg.Msg == "Start_Election" {
+		fmt.Println("I Have to Start Election Process Message to become coordinator +++++++++++++++++++++++++")
+		start_election(sd)
+		println("Election started----------------: ", sd.ElectionExplorer.M)
+	}
+}
+
+func start_election(sd *SyncerDelegate) {
+	nodeId, _ := strconv.Atoi(ParseNodeId(sd.LocalNode.Name))
+	tempExplorer := Election.NewElection(nodeId, *sd.LocalNode)
+
+	sd.ElectionExplorer = tempExplorer
+
+	sd.EchoMessage.EchoWaitedNum = len(sd.Neighbours.Neighbours)
+	sendExplorer(tempExplorer, sd)
+}
+
+//clear the available neighbour list
+//Read Graph from file
+//add Nodes to Neighbourlist if there is a releastionship for this nod found
+//Send the new neighbour list to MasterNode
+func read_neighbours_from_dot_file(sd *SyncerDelegate, receivedMsg Message) {
+	sd.neighbourFilePath = &receivedMsg.FilePath
+	ReadNeighbourFromDot(sd)
+
+	for _, ne := range sd.Neighbours.Neighbours {
+		fmt.Println("Neigbous: ", ne.Name)
 	}
 }
 
 //update the local echo sender list
 func UpdateLocalEchoMessage(sd *SyncerDelegate, echo_message *Election.Echo) {
+	sd.EchoMessage.EchoRecievedNum++
+	sd.EchoMessage.AddSender(echo_message.EchoSender)
 	sd.EchoMessage.Coordinator = sd.ElectionExplorer.M
 	sd.EchoMessage.EchoSender = *sd.LocalNode
 	sd.EchoMessage.AddSender(*sd.LocalNode)
@@ -208,37 +250,7 @@ func UpdateLocalEchoMessage(sd *SyncerDelegate, echo_message *Election.Echo) {
 
 }
 
-func SendEchoMessageFirst(sd *SyncerDelegate) {
-	fmt.Println("Send Echo For the First time to : ", sd.ElectionExplorer.Initiator)
-
-	sd.EchoMessage.Coordinator = sd.ElectionExplorer.M
-	sd.EchoMessage.EchoSender = *sd.LocalNode
-	sd.EchoMessage.AddSender(*sd.LocalNode)
-
-	body, err := json.Marshal(sd.EchoMessage)
-	error_and_msg := Error_And_Msg{Err: err, Text: "Encode the EchoStruct faild!"}
-	Check(error_and_msg)
-
-	if sd.LocalNode.Name != "Master" {
-		sd.Node.SendBestEffort(sd.ElectionExplorer.Initiator, body)
-	}
-}
-
-func (sd *SyncerDelegate) SendEchoToNeighbours(value interface{}) {
-	body, err := json.Marshal(value)
-	error_and_msg := Error_And_Msg{Err: err, Text: "Encode the Struct faild!"}
-	Check(error_and_msg)
-
-	//Echo wird nur an sender der ExplorerNachricht und an alle,
-	//die auch gleiche Nachricht gesendet haben, gesendet
-	for _, neighbour := range sd.Neighbours.Neighbours {
-		if neighbour.Name == sd.ElectionExplorer.Initiator.Name {
-			sd.Node.SendBestEffort(&neighbour, body)
-			fmt.Println("Echo Send To: ", neighbour.Name)
-		}
-
-	}
-}
+//Echo wird nur an sender der ExplorerNachricht gesendet
 
 func sendExplorer(explorer *Election.ElectionExplorer, sd *SyncerDelegate) {
 	body, err := json.Marshal(explorer)
@@ -251,39 +263,6 @@ func sendExplorer(explorer *Election.ElectionExplorer, sd *SyncerDelegate) {
 			sd.Node.SendBestEffort(&neighbour, body)
 		}
 
-	}
-}
-
-func (sd *SyncerDelegate) SendMsgToNeighbours(value interface{}) {
-	if rumors, ok := value.(*Rumors); ok {
-		recievedFrom_temp := rumors.RummorsMsg.Snder
-		rumors.RummorsMsg.Snder = sd.LocalNode.Name
-		rumors.RecievedFrom = append(rumors.RecievedFrom, *sd.LocalNode)
-
-		for _, neighbour := range sd.Neighbours.Neighbours {
-
-			if neighbour.Name != recievedFrom_temp {
-				rumors.RummorsMsg.Receiver = neighbour.Name
-				rumors.RummorsMsg.SendTime = time.Now()
-				body, err := json.Marshal(rumors)
-				error_and_msg := Error_And_Msg{Err: err, Text: "Encode the rumors faild!"}
-				Check(error_and_msg)
-
-				sd.Node.SendBestEffort(&neighbour, body)
-			}
-		}
-	} else if explorer, ok := value.(*Election.ElectionExplorer); ok {
-		recievedFrom_temp := explorer.Initiator.Name
-		for _, neighbour := range sd.Neighbours.Neighbours {
-			if neighbour.Name != recievedFrom_temp {
-
-				body, err := json.Marshal(explorer)
-				error_and_msg := Error_And_Msg{Err: err, Text: "Encode the rumors faild!"}
-				Check(error_and_msg)
-
-				sd.Node.SendBestEffort(&neighbour, body)
-			}
-		}
 	}
 }
 
@@ -415,4 +394,28 @@ func (sd *SyncerDelegate) MergeRemoteState(buf []byte, join bool) {
 // the given byte size. This metadata is available in the Node structure.
 func (sd *SyncerDelegate) NodeMeta(limit int) []byte {
 	return []byte{}
+}
+
+func (sd *SyncerDelegate) SendMesgToList(list map[string]memberlist.Node, value interface{}) {
+	if len(list) <= 0 {
+		return
+	}
+
+	body, err := json.Marshal(value)
+	error_and_msg := Error_And_Msg{Err: err, Text: "Encode the Struct faild!"}
+	Check(error_and_msg)
+
+	for _, member := range list {
+		sd.Node.SendBestEffort(&member, body)
+	}
+}
+
+func (sd *SyncerDelegate) SendMesgToMember(node memberlist.Node, value interface{}) {
+	body, err := json.Marshal(value)
+	error_and_msg := Error_And_Msg{Err: err, Text: "Encode the Struct faild!"}
+	Check(error_and_msg)
+
+	sd.Node.SendBestEffort(&node, body)
+	fmt.Println("Echo Send To: ", node.Name)
+
 }

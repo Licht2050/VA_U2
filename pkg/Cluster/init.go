@@ -192,7 +192,10 @@ func userInput(ml *memberlist.Memberlist, g *Graph.Graph,
 	case Print_Cluster_Nodes:
 		print_all_nodes(ml)
 	case Send_Rumor:
-		SendElectionExplorer(ml, &sd)
+		// SendElectionExplorer(ml, &sd)
+
+		ChooseRandomCoordinator_Candidates(*ml, &sd)
+
 	case ParseNeighbourG_To_PNG:
 		print_neighbours_as_digraph(g, nodesNeighbour)
 		parseDiGToPNG(g)
@@ -299,28 +302,12 @@ func parseDiGToPNG(g *Graph.Graph) {
 
 func SendElectionExplorer(ml *memberlist.Memberlist, sd *SyncerDelegate) {
 	tempExplorer := Election.NewElection(8, *ml.LocalNode())
-	sd.ElectionExplorer.M = 8
+	// sd.ElectionExplorer.M = 8
 	sd.ElectionExplorer = tempExplorer
-	sd.SendMsgToNeighbours(tempExplorer)
-	println("Election initiert----------------: %s", ml.LocalNode().Name)
+	sendExplorer(tempExplorer, sd)
+	// sd.SendMsgToNeighbours(tempExplorer)
+	println("Election initiert----------------: ", sd.ElectionExplorer.M)
 
-}
-
-func SendRumors(ml *memberlist.Memberlist, rumorsList *RumorsList, sd *SyncerDelegate) {
-	input := -1
-	fmt.Println("Empfang von wie viel knotes ist der Geruecht glaubhaft: ")
-	UserInputInt(&input)
-	sd.BelievableRumorsRNum = &input
-
-	msg := Message{Msg: "HTW wid im Sommersemester 2022 auf die Onlinevorlesung umgestellt"}
-	rumors := new(Rumors)
-	rumors.RummorsMsg = msg
-
-	rumorsList.AddRumorsToList(*rumors)
-	sd.SendMsgToNeighbours(rumors)
-
-	println("Gereucht initiert----------------: %s", ml.LocalNode().Name)
-	time.Sleep(1 * time.Second)
 }
 
 func Input(nodeNum *int, edgeNum *int) {
@@ -335,4 +322,42 @@ func Input(nodeNum *int, edgeNum *int) {
 		}
 		fmt.Println("Edgesanzahl >= Nodeanzahl eingeben: ")
 	}
+}
+
+func ChooseRandomCoordinator_Candidates(ml memberlist.Memberlist, sd *SyncerDelegate) {
+	fmt.Println("\n\nAnzahl der Kandidaten eingeben: ")
+	candidates_Number := 4
+	UserInputInt(&candidates_Number)
+	temp := make(map[string]memberlist.Node)
+
+	ChooseRandom_ClusterMembers(&candidates_Number, ml, temp)
+	fmt.Println("\n\n\n\nCoordinator Candidates: ")
+	for _, condidates := range temp {
+		fmt.Println("\t", condidates.Name)
+	}
+	fmt.Printf("\n\n\n\n")
+
+	msg := Message{Msg: "Start_Election"}
+	sd.SendMesgToList(temp, msg)
+}
+
+func ChooseRandom_ClusterMembers(input *int, ml memberlist.Memberlist, temp map[string]memberlist.Node) {
+
+	if *input > len(ml.Members()) {
+		fmt.Println("Die Anzahl der Kandidaten soll kleine als aktive Cluster-Members sein!")
+		return
+	}
+
+	// temp := make(map[string]memberlist.Node)
+	for i := 0; i < *input; i++ {
+		for {
+			rIndex := rand.Intn(len(ml.Members()))
+			if _, ok := temp[ml.Members()[rIndex].Name]; !ok {
+				temp[ml.Members()[rIndex].Name] = *ml.Members()[rIndex]
+				break
+			}
+		}
+
+	}
+
 }

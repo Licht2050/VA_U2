@@ -39,6 +39,13 @@ const (
 	Default
 )
 
+const (
+	MESSAGE = iota
+	ELECTION_EXPLORER_MESSAGE
+	ELECTION_ECHO_MESSAGE
+	NEIGHBOUR_INFO_MESSAGE
+)
+
 func Menu() {
 
 	fmt.Println("Menu")
