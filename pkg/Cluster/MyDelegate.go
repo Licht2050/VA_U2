@@ -34,6 +34,7 @@ type SyncerDelegate struct {
 	neighbourFilePath    *string
 	BelievableRumorsRNum *int
 	Local_Appointment    *Appointment
+	Local_AP_Protocol    *Appointment_Protocol
 }
 
 //compare the incoming byte message to structs
@@ -95,22 +96,100 @@ func appointment_Handling(msg []byte, sd *SyncerDelegate) {
 	_ = err
 	if apnt_message.Message.Msg == "start_appointment_process" {
 		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Appointment process initiator!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-		temp_neighbour := ChoosRand_Time_and_Neighbour(sd)
 
-		sd.SendMesgToList(temp_neighbour, sd.Local_Appointment)
+		selected_neighbour := First_Apnt_negotiation(sd)
+		sd.SendMesgToList(selected_neighbour, sd.Local_Appointment)
+		fmt.Println("Appointment Send To: ", sd.Local_AP_Protocol.Rand_Selected_Neighbours)
+
+	} else {
+		if sd.Local_AP_Protocol.A_Max != sd.Local_AP_Protocol.Counter {
+
+			if sd.Local_Appointment.Time == 0 {
+				fmt.Println("if zero")
+				selected_neighbour := First_Apnt_negotiation(sd)
+				sd.Local_Appointment.Make_an_Appointment(apnt_message.Time, apnt_message.Inviter)
+				t_negotiationMessage := TimeNegotiation_Message(*sd)
+				sd.SendMesgToMember(apnt_message.Inviter, t_negotiationMessage)
+				sd.SendMesgToList(selected_neighbour, t_negotiationMessage)
+				sd.Local_AP_Protocol.Add_Appointment(*sd.Local_Appointment)
+				sd.Local_AP_Protocol.Counter++
+
+				fmt.Println("recieved time: ", apnt_message.Time, "\tfrom : ", apnt_message.Inviter)
+				fmt.Println("after calculation time: ", sd.Local_Appointment.Time)
+				fmt.Println("Appointment Send To: ", selected_neighbour)
+
+				fmt.Println("negotiation: ", sd.Local_AP_Protocol.Appointments)
+
+				//if the recieved appointment time is the same as the local appointment time has, then should be ignored
+			} else if sd.Local_Appointment.Time != apnt_message.Time {
+				fmt.Println("if greater")
+				// temp_neighbour := ChoosRand_Time_and_Neighbour(sd)
+				fmt.Println("Recieved time: ", apnt_message.Time, "from: ", apnt_message.Inviter)
+				// _, temp_neighbour := ChoosRand_Time_and_Neighbour(sd)
+				fmt.Println("Local time: ", sd.Local_Appointment.Time)
+
+				sd.Local_Appointment.Make_an_Appointment(apnt_message.Time, apnt_message.Inviter)
+				sd.Local_AP_Protocol.Add_Appointment(*sd.Local_Appointment)
+				sd.Local_AP_Protocol.Counter++
+
+				if _, ok := sd.Local_AP_Protocol.Rand_Selected_Neighbours[apnt_message.Inviter.Name]; !ok {
+					t_negotiationMessage := TimeNegotiation_Message(*sd)
+					sd.SendMesgToMember(apnt_message.Inviter, t_negotiationMessage)
+				}
+
+				fmt.Println("new time: ", sd.Local_Appointment.Time)
+
+				fmt.Println("negotiation: ", sd.Local_AP_Protocol.Appointments)
+
+			}
+		} else if sd.Local_AP_Protocol.Counter == len(sd.Local_AP_Protocol.Rand_Selected_Neighbours) {
+			fmt.Println("Done-----------------------: ", sd.Local_AP_Protocol.Available_Appointments)
+		}
 	}
-
-	temp_neighbour := ChoosRand_Time_and_Neighbour(sd)
-	fmt.Printf("Selected Neighbour: %v, and msg recieved from: %s \n", temp_neighbour, &apnt_message.Inviter)
 
 }
 
-func ChoosRand_Time_and_Neighbour(sd *SyncerDelegate) map[string]memberlist.Node {
+func TimeNegotiation_Message(sd SyncerDelegate) Appointment {
+	temp := Appointment{}
+	temp = *sd.Local_Appointment
+	temp.Inviter = *sd.LocalNode
+
+	return temp
+}
+
+func First_Apnt_negotiation(sd *SyncerDelegate) map[string]memberlist.Node {
+
+	preferred_Time, temp_neighbour := ChoosRand_Time_and_Neighbour(sd)
 	sd.Local_Appointment.Clear()
-	sd.Local_Appointment.Create_Available_Time(10, *sd.LocalNode)
-	temp_neighbour := make(map[string]memberlist.Node)
-	sd.Neighbours.ChooseRandomNeighbour(1, temp_neighbour)
+	sd.Local_Appointment.Create_Available_Time(preferred_Time, *sd.LocalNode)
+	sd.Local_AP_Protocol.CopyRandSelected_Neighbour(temp_neighbour)
+	fmt.Println("Selected Appointment Time: ", sd.Local_Appointment.Time)
+
+	// selected_neighbor := memberlist.Node{}
+	// for _, neighbor := range temp_neighbour {
+	// 	selected_neighbor = neighbor
+	// }
 	return temp_neighbour
+}
+
+func ChoosRand_Time_and_Neighbour(sd *SyncerDelegate) (int, map[string]memberlist.Node) {
+
+	preferred_Time := ChoosePreferredTime(sd)
+	temp_neighbour := make(map[string]memberlist.Node)
+
+	//Anzahl P randomly ausgewaehlte neighbours wird auch durch zufall gemacht.
+	rIndex := rand.Intn(len(sd.Neighbours.Neighbours))
+	if rIndex == 0 {
+		rIndex++
+	}
+	sd.Neighbours.ChooseRandomNeighbour(rIndex, temp_neighbour)
+
+	return preferred_Time, temp_neighbour
+}
+
+func ChoosePreferredTime(sd *SyncerDelegate) int {
+	rIndex := rand.Intn(len(sd.Local_AP_Protocol.Available_Appointments))
+	return sd.Local_AP_Protocol.Available_Appointments[rIndex]
 }
 
 func neighbour_info_message_handling(sd *SyncerDelegate, msg []byte) {
@@ -142,6 +221,7 @@ func echo_message_handling(msg []byte, sd *SyncerDelegate) {
 			} else {
 				fmt.Println("I am the Coordinator and i Recieved From : ", sd.EchoMessage.EchoSenderList)
 				Inform_coordinator_success(*sd.EchoMessage, *sd)
+				time.Sleep(2 * time.Second)
 				Inform_Appointment_Process_Starter(sd)
 
 			}
@@ -293,6 +373,8 @@ func Message_Handling(msg []byte, sd *SyncerDelegate) {
 	switch receivedMsg.Msg {
 	case "Iam_the_Coordinator":
 		fmt.Println("Message : ", receivedMsg.Msg, "Coordinator: ", receivedMsg.Snder)
+		sd.Local_AP_Protocol.Start_Value()
+		sd.Local_Appointment.Clear()
 	case "leave":
 		//Leave will kill the process
 		//and the node will remove from Cluster-Memberlist

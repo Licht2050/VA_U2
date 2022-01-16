@@ -82,6 +82,8 @@ func InitCluster(nodeName, bindIP, bindPort, httpPort string) {
 
 	//Appointment
 	appointment := Appointment{}
+	available_Appointment := []int{1, 2, 3, 4, 7, 8, 9, 10, 11, 12}
+	appointment_Protocol := CreateAppointmentProtocol(*ml.LocalNode(), 3, available_Appointment)
 
 	//register all var to syncerdelegate
 	sd := &SyncerDelegate{
@@ -97,6 +99,7 @@ func InitCluster(nodeName, bindIP, bindPort, httpPort string) {
 		RingMessage:          ringMessage,
 		EchoCounter:          echoCounter,
 		Local_Appointment:    &appointment,
+		Local_AP_Protocol:    appointment_Protocol,
 	}
 
 	config.Delegate = sd
