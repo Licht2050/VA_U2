@@ -72,6 +72,8 @@ func JoinCluster(nodeName, bindIP, bindPort, httpPort, clusterKey, knownIP strin
 	echoCounter := new(int)
 	echoMessage.Clear()
 
+	//Appointment
+	appointment := Appointment{}
 	sd := &SyncerDelegate{
 		Node: ml, Neighbours: neigbours, NeighbourNum: &neigbourNum,
 		NodeList: nodeList, MasterNode: masterNode,
@@ -82,6 +84,7 @@ func JoinCluster(nodeName, bindIP, bindPort, httpPort, clusterKey, knownIP strin
 		EchoMessage:          echoMessage,
 		RingMessage:          ringMessage,
 		EchoCounter:          echoCounter,
+		Local_Appointment:    &appointment,
 	}
 
 	config.Delegate = sd

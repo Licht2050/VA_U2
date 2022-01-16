@@ -5,7 +5,6 @@ import (
 	"VAA_Uebung1/pkg/Neighbour"
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"time"
@@ -44,11 +43,12 @@ const (
 	ELECTION_EXPLORER_MESSAGE
 	ELECTION_ECHO_MESSAGE
 	NEIGHBOUR_INFO_MESSAGE
+	APPOINTMENT_MESSAGE
 )
 
 const (
-	RECIEVED_ExplorerID_EQUAL_TO_Local_ID = iota
-	RECIEVED_ExplorerID_GREATER_TO_Local_ID
+	RECIEVED_ExplorerID_EQUAL_THEN_Local_ID = iota
+	RECIEVED_ExplorerID_GREATER_THEN_Local_ID
 	IS_LEAF_NODE
 	IS_NOT_LEAF_NODE
 )
@@ -102,13 +102,6 @@ func write_key_to_file(clusterKey string, bindPort int, fileName string) {
 	w.Flush()
 }
 
-func (sd *SyncerDelegate) Leave() {
-	log.Println("Leave Node: ", sd.Node.LocalNode().Addr)
-	sd.Node.Leave(1 * time.Second)
-	sd.Node.Shutdown()
-	os.Exit(1)
-}
-
 func AddClusterMemberToNodeList(ml *memberlist.Memberlist, nodeList *Neighbour.NodesList) {
 	for _, node := range ml.Members() {
 		if node.Name != ml.LocalNode().Name {
@@ -160,4 +153,10 @@ func ParseNodeId(s string) (numbers string) {
 	}
 	// return string(l), string(n)
 	return string(n)
+}
+
+func PassSlicetoMap(ml memberlist.Memberlist, memberMap map[string]memberlist.Node) {
+	for _, node := range ml.Members() {
+		memberMap[node.Name] = *node
+	}
 }

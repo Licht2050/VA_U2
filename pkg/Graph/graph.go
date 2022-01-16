@@ -243,7 +243,7 @@ func (g *Graph) ParseGraphToPNGFile(filename string) {
 	cmd.Wait()
 }
 
-func RondomDiGraph(nodeNum, edgeNum int, directed bool) Graph {
+func RondomGraph(nodeNum, edgeNum int, directed bool) Graph {
 	var g *Graph
 	if directed {
 		g = NewDiGraph()

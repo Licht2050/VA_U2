@@ -80,6 +80,9 @@ func InitCluster(nodeName, bindIP, bindPort, httpPort string) {
 	echoCounter := new(int)
 	echoMessage.Clear()
 
+	//Appointment
+	appointment := Appointment{}
+
 	//register all var to syncerdelegate
 	sd := &SyncerDelegate{
 		Node: ml, Neighbours: neigbours, NeighbourNum: &neigbourNum,
@@ -93,6 +96,7 @@ func InitCluster(nodeName, bindIP, bindPort, httpPort string) {
 		EchoMessage:          echoMessage,
 		RingMessage:          ringMessage,
 		EchoCounter:          echoCounter,
+		Local_Appointment:    &appointment,
 	}
 
 	config.Delegate = sd
@@ -214,14 +218,14 @@ func userInput(ml *memberlist.Memberlist, g *Graph.Graph,
 		nodeNum := -1
 		edgeNum := -1
 		Input(&nodeNum, &edgeNum)
-		g := Graph.RondomDiGraph(nodeNum, edgeNum, true)
+		g := Graph.RondomGraph(nodeNum, edgeNum, true)
 		fmt.Println(g.String())
 		parseDiGToPNG(&g)
 	case Pars_Random_UnDiGraph_PNG:
 		nodeNum := -1
 		edgeNum := -1
 		Input(&nodeNum, &edgeNum)
-		g := Graph.RondomDiGraph(nodeNum, edgeNum, false)
+		g := Graph.RondomGraph(nodeNum, edgeNum, false)
 		fmt.Println(g.String())
 		parseDiGToPNG(&g)
 
@@ -339,17 +343,18 @@ func ChooseRandomCoordinator_Candidates(ml memberlist.Memberlist, sd *SyncerDele
 
 	msg := Message{Msg: "Start_Election"}
 	sd.SendMesgToList(temp, msg)
+
 }
 
-func ChooseRandom_ClusterMembers(input *int, ml memberlist.Memberlist, temp map[string]memberlist.Node) {
+func ChooseRandom_ClusterMembers(randMemberNum *int, ml memberlist.Memberlist, temp map[string]memberlist.Node) {
 
-	if *input > len(ml.Members()) {
-		fmt.Println("Die Anzahl der Kandidaten soll kleine als aktive Cluster-Members sein!")
+	if *randMemberNum > len(ml.Members()) {
+		fmt.Println("Die Anzahl der RandMember soll kleine als aktive Cluster-Members sein!")
 		return
 	}
 
 	// temp := make(map[string]memberlist.Node)
-	for i := 0; i < *input; i++ {
+	for i := 0; i < *randMemberNum; i++ {
 		for {
 			rIndex := rand.Intn(len(ml.Members()))
 			if _, ok := temp[ml.Members()[rIndex].Name]; !ok {

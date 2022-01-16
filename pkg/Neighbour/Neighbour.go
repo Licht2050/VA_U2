@@ -105,6 +105,24 @@ func (nl *NeighboursList) String() string {
 	return out
 }
 
+func (nl *NeighboursList) ChooseRandomNeighbour(num int, randNeighbour map[string]memberlist.Node) {
+	if num > len(nl.Neighbours) {
+		fmt.Println("Die Anzahl der RandMember soll kleine als Anzahl der Neighbour sein!")
+		return
+	}
+
+	// temp := make(map[string]memberlist.Node)
+	for i := 0; i < num; {
+
+		rIndex := rand.Intn(len(nl.Neighbours))
+		if _, ok := randNeighbour[nl.Neighbours[rIndex].Name]; !ok {
+			randNeighbour[nl.Neighbours[rIndex].Name] = nl.Neighbours[rIndex]
+			i++
+		}
+
+	}
+}
+
 func (nl *NeighboursList) Contains(node *memberlist.Node) bool {
 	if node == nil {
 		log.Println("Search the nod in the NeighbourList failed: param is empty!")
