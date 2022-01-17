@@ -76,6 +76,12 @@ func JoinCluster(nodeName, bindIP, bindPort, httpPort, clusterKey, knownIP strin
 	appointment := Appointment{}
 	available_Appointment := []int{1, 2, 3, 4, 7, 8, 9, 10, 11, 12}
 	appointment_Protocol := CreateAppointmentProtocol(*ml.LocalNode(), 3, available_Appointment)
+	cluster_appointment_Protocol := CreateAppointmentProtocol(*ml.LocalNode(), 0, available_Appointment)
+
+	doubleCounting1 := 0
+	doubleCounting2 := 0
+
+	test := make(chan Message, 1)
 
 	sd := &SyncerDelegate{
 		Node: ml, Neighbours: neigbours, NeighbourNum: &neigbourNum,
@@ -89,6 +95,10 @@ func JoinCluster(nodeName, bindIP, bindPort, httpPort, clusterKey, knownIP strin
 		EchoCounter:          echoCounter,
 		Local_Appointment:    &appointment,
 		Local_AP_Protocol:    appointment_Protocol,
+		Double_Counting1:     &doubleCounting1,
+		Double_Counting2:     &doubleCounting2,
+		Chanel:               &test,
+		Cluster_AP_Protocol:  cluster_appointment_Protocol,
 	}
 
 	config.Delegate = sd

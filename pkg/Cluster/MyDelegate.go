@@ -35,6 +35,10 @@ type SyncerDelegate struct {
 	BelievableRumorsRNum *int
 	Local_Appointment    *Appointment
 	Local_AP_Protocol    *Appointment_Protocol
+	Cluster_AP_Protocol  *Appointment_Protocol
+	Double_Counting1     *int
+	Double_Counting2     *int
+	Chanel               *chan Message
 }
 
 //compare the incoming byte message to structs
@@ -102,26 +106,28 @@ func appointment_Handling(msg []byte, sd *SyncerDelegate) {
 		fmt.Println("Appointment Send To: ", sd.Local_AP_Protocol.Rand_Selected_Neighbours)
 
 	} else {
-		if sd.Local_AP_Protocol.A_Max != sd.Local_AP_Protocol.Counter {
 
-			if sd.Local_Appointment.Time == 0 {
-				fmt.Println("if zero")
-				selected_neighbour := First_Apnt_negotiation(sd)
-				sd.Local_Appointment.Make_an_Appointment(apnt_message.Time, apnt_message.Inviter)
-				t_negotiationMessage := TimeNegotiation_Message(*sd)
-				sd.SendMesgToMember(apnt_message.Inviter, t_negotiationMessage)
-				sd.SendMesgToList(selected_neighbour, t_negotiationMessage)
-				sd.Local_AP_Protocol.Add_Appointment(*sd.Local_Appointment)
-				sd.Local_AP_Protocol.Counter++
+		fmt.Println("TEST________--------------------:: ", sd.Local_AP_Protocol.Rand_Selected_Neighbours)
 
-				fmt.Println("recieved time: ", apnt_message.Time, "\tfrom : ", apnt_message.Inviter)
-				fmt.Println("after calculation time: ", sd.Local_Appointment.Time)
-				fmt.Println("Appointment Send To: ", selected_neighbour)
+		if sd.Local_Appointment.Time == 0 {
+			fmt.Println("if zero")
+			selected_neighbour := First_Apnt_negotiation(sd)
+			sd.Local_Appointment.Make_an_Appointment(apnt_message.Time, apnt_message.Inviter)
+			t_negotiationMessage := TimeNegotiation_Message(*sd)
+			sd.SendMesgToMember(apnt_message.Inviter, t_negotiationMessage)
+			sd.SendMesgToList(selected_neighbour, t_negotiationMessage)
+			sd.Local_AP_Protocol.Add_Appointment(*sd.Local_Appointment)
+			sd.Local_AP_Protocol.Recieved_Counter++
 
-				fmt.Println("negotiation: ", sd.Local_AP_Protocol.Appointments)
+			fmt.Println("recieved time: ", apnt_message.Time, "\tfrom : ", apnt_message.Inviter)
+			fmt.Println("after calculation time: ", sd.Local_Appointment.Time)
+			fmt.Println("Appointment Send To: ", selected_neighbour)
 
-				//if the recieved appointment time is the same as the local appointment time has, then should be ignored
-			} else if sd.Local_Appointment.Time != apnt_message.Time {
+			fmt.Println("negotiation: ", sd.Local_AP_Protocol.Appointments)
+
+			//if the recieved appointment time is the same as the local appointment time has, then should be ignored
+		} else if sd.Local_Appointment.Time != apnt_message.Time && TimeNegotiation_continuation_Check(*sd) {
+			{
 				fmt.Println("if greater")
 				// temp_neighbour := ChoosRand_Time_and_Neighbour(sd)
 				fmt.Println("Recieved time: ", apnt_message.Time, "from: ", apnt_message.Inviter)
@@ -130,11 +136,13 @@ func appointment_Handling(msg []byte, sd *SyncerDelegate) {
 
 				sd.Local_Appointment.Make_an_Appointment(apnt_message.Time, apnt_message.Inviter)
 				sd.Local_AP_Protocol.Add_Appointment(*sd.Local_Appointment)
-				sd.Local_AP_Protocol.Counter++
+				sd.Local_AP_Protocol.Recieved_Counter++
 
-				if _, ok := sd.Local_AP_Protocol.Rand_Selected_Neighbours[apnt_message.Inviter.Name]; !ok {
-					t_negotiationMessage := TimeNegotiation_Message(*sd)
-					sd.SendMesgToMember(apnt_message.Inviter, t_negotiationMessage)
+				t_negotiationMessage := TimeNegotiation_Message(*sd)
+				sd.SendMesgToMember(apnt_message.Inviter, t_negotiationMessage)
+				if _, ok := sd.Local_AP_Protocol.Rand_Selected_Neighbours[apnt_message.Inviter.Name]; ok {
+
+					sd.Local_AP_Protocol.Waited_Counter++
 				}
 
 				fmt.Println("new time: ", sd.Local_Appointment.Time)
@@ -142,11 +150,22 @@ func appointment_Handling(msg []byte, sd *SyncerDelegate) {
 				fmt.Println("negotiation: ", sd.Local_AP_Protocol.Appointments)
 
 			}
-		} else if sd.Local_AP_Protocol.Counter == len(sd.Local_AP_Protocol.Rand_Selected_Neighbours) {
+		} else if sd.Local_AP_Protocol.Waited_Counter == len(sd.Local_AP_Protocol.Rand_Selected_Neighbours) {
 			fmt.Println("Done-----------------------: ", sd.Local_AP_Protocol.Available_Appointments)
 		}
 	}
 
+}
+
+func TimeNegotiation_continuation_Check(sd SyncerDelegate) bool {
+
+	if sd.Local_AP_Protocol.A_Max == sd.Local_AP_Protocol.Recieved_Counter {
+		return false
+	}
+	if sd.Local_AP_Protocol.Waited_Counter == len(sd.Local_AP_Protocol.Rand_Selected_Neighbours) {
+		return false
+	}
+	return true
 }
 
 func TimeNegotiation_Message(sd SyncerDelegate) Appointment {
@@ -220,13 +239,47 @@ func echo_message_handling(msg []byte, sd *SyncerDelegate) {
 
 			} else {
 				fmt.Println("I am the Coordinator and i Recieved From : ", sd.EchoMessage.EchoSenderList)
-				Inform_coordinator_success(*sd.EchoMessage, *sd)
+				msg := Message{Msg: "Iam_the_Coordinator", Snder: sd.Node.LocalNode().Name}
+				Inform_Cluster_Node(*sd.EchoMessage, *sd, msg)
 				time.Sleep(2 * time.Second)
 				Inform_Appointment_Process_Starter(sd)
+				// DoubleCountingAlg(*sd)
+				// time.Sleep(3 * time.Second)
+				go TestChannel(*sd.Chanel, *sd)
 
 			}
 		}
 	}
+}
+
+func TestChannel(ch chan Message, sd SyncerDelegate) {
+	test := 0
+	DoubleCountingAlg(sd)
+	for test < 100 {
+
+		time.Sleep(1 * time.Second)
+		// DoubleCountingAlg(sd)
+		// fmt.Println("TESTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT")
+		if sd.Double_Counting1 == sd.Double_Counting2 {
+			fmt.Println("Equal------------------------------------------: ", sd.Double_Counting1, "    : ", sd.Double_Counting2)
+		}
+		if test%10 == 0 {
+			*sd.Double_Counting1 = 0
+			*sd.Double_Counting2 = 0
+			DoubleCountingAlg(sd)
+			fmt.Println("TESTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT", *sd.Double_Counting1)
+		}
+		test++
+
+	}
+}
+
+func DoubleCountingAlg(sd SyncerDelegate) {
+	msg := Message{Msg: "Double_Counting_Alg1", Snder: sd.Node.LocalNode().Name}
+	Inform_Cluster_Node(*sd.EchoMessage, sd, msg)
+	time.Sleep(1 * time.Second)
+	msg = Message{Msg: "Double_Counting_Alg2", Snder: sd.Node.LocalNode().Name}
+	Inform_Cluster_Node(*sd.EchoMessage, sd, msg)
 }
 
 //it call a function to choose a specific number of nods randomly.
@@ -258,8 +311,8 @@ func ChoseRondomFromMap(mp map[string]*memberlist.Node) string {
 	return temp_slice[randIndex]
 }
 
-func Inform_coordinator_success(echo Election.Echo, sd SyncerDelegate) {
-	msg := Message{Msg: "Iam_the_Coordinator", Snder: sd.Node.LocalNode().Name}
+func Inform_Cluster_Node(echo Election.Echo, sd SyncerDelegate, msg Message) {
+
 	// apnt := Appointment{}
 	// apnt.Create_Available_Time(11, *sd.LocalNode)
 	for _, sender := range echo.EchoSenderList {
@@ -373,6 +426,8 @@ func Message_Handling(msg []byte, sd *SyncerDelegate) {
 	switch receivedMsg.Msg {
 	case "Iam_the_Coordinator":
 		fmt.Println("Message : ", receivedMsg.Msg, "Coordinator: ", receivedMsg.Snder)
+		coordinator := SearchMemberbyName(receivedMsg.Snder, sd.Node)
+		sd.ElectionExplorer.Initiator = coordinator
 		sd.Local_AP_Protocol.Start_Value()
 		sd.Local_Appointment.Clear()
 	case "leave":
@@ -388,7 +443,47 @@ func Message_Handling(msg []byte, sd *SyncerDelegate) {
 		fmt.Println("I Have to Start Election Process Message to become coordinator +++++++++++++++++++++++++")
 		start_election(sd)
 
+	case "Double_Counting_Alg1":
+		fmt.Println(receivedMsg.Snder, "Double_Counting_Alg1       ", sd.LocalNode.Name)
+		if sd.LocalNode.Name == sd.ElectionExplorer.Initiator.Name {
+
+			*sd.Double_Counting1++
+			fmt.Println("---------------------------888888888888888888888888888888888----------A1----------: ", *sd.Double_Counting1)
+		} else {
+			if !TimeNegotiation_continuation_Check(*sd) {
+				coordinator := SearchMemberbyName(receivedMsg.Snder, sd.Node)
+				msg := Message{Msg: "Double_Counting_Alg1"}
+				sd.SendMesgToMember(*coordinator, msg)
+			}
+		}
+
+	case "Double_Counting_Alg2":
+		fmt.Println(receivedMsg.Snder, "Double_Counting_Alg2")
+		if sd.LocalNode.Name == sd.ElectionExplorer.Initiator.Name {
+			*sd.Double_Counting2++
+			// select {}
+			fmt.Println("---------------------------888888888888888888888888888888888---A2-----------------: ", *sd.Double_Counting2)
+		} else {
+			if !TimeNegotiation_continuation_Check(*sd) {
+				// coordinator := SearchMemberbyName(receivedMsg.Snder, sd.Node)
+				msg := Message{Msg: "Double_Counting_Alg2"}
+				sd.SendMesgToMember(*sd.ElectionExplorer.Initiator, msg)
+			}
+		}
+
 	}
+
+}
+
+func DoubleC(ch chan Message, sd SyncerDelegate) {
+
+	temp := Message{}
+	time.Sleep(3 * time.Second)
+	fmt.Printf("Send message %d\n", *sd.Double_Counting1)
+	// if *sd.Double_Counting == 0 {
+	temp.Msg = "Negotiation_finish"
+	// }
+	ch <- temp
 }
 
 func start_election(sd *SyncerDelegate) {
